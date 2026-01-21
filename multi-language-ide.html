@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Language IDE | Lisp • Prolog • WASM</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-panel: #12121a;
+            --bg-editor: #0d0d14;
+            --border: #1e1e2e;
+            --text: #e0e0e8;
+            --text-dim: #6e6e8a;
+            --accent-lisp: #ff6b6b;
+            --accent-lisp-glow: rgba(255, 107, 107, 0.3);
+            --accent-prolog: #4ecdc4;
+            --accent-prolog-glow: rgba(78, 205, 196, 0.3);
+            --accent-wasm: #a78bfa;
+            --accent-wasm-glow: rgba(167, 139, 250, 0.3);
+            --success: #a8e6cf;
+            --error: #ff8a80;
+            --warning: #ffd93d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background: 
+                radial-gradient(ellipse at 10% 20%, rgba(255, 107, 107, 0.04) 0%, transparent 40%),
+                radial-gradient(ellipse at 90% 80%, rgba(78, 205, 196, 0.04) 0%, transparent 40%),
+                radial-gradient(ellipse at 50% 50%, rgba(167, 139, 250, 0.03) 0%, transparent 50%);
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        /* Header */
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(10px);
+            background: rgba(10, 10, 15, 0.85);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent-lisp), var(--accent-prolog), var(--accent-wasm));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--bg-dark);
+        }
+
+        .logo h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-lisp), var(--accent-prolog), var(--accent-wasm));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo span {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.25rem;
+            border-radius: 10px;
+        }
+
+        .tab {
+            padding: 0.6rem 1.25rem;
+            border: none;
+            background: transparent;
+            color: var(--text-dim);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab.active {
+            color: var(--bg-dark);
+            font-weight: 600;
+        }
+
+        .tab.lisp.active {
+            background: var(--accent-lisp);
+            box-shadow: 0 0 20px var(--accent-lisp-glow);
+        }
+
+        .tab.prolog.active {
+            background: var(--accent-prolog);
+            box-shadow: 0 0 20px var(--accent-prolog-glow);
+        }
+
+        .tab.wasm.active {
+            background: var(--accent-wasm);
+            box-shadow: 0 0 20px var(--accent-wasm-glow);
+        }
+
+        /* Main Content */
+        main {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            height: calc(100vh - 77px);
+        }
+
+        .panel {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .panel.active {
+            display: flex;
+        }
+
+        /* Editor Section */
+        .editor-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            min-width: 0;
+        }
+
+        .section-header {
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-panel);
+            flex-shrink: 0;
+        }
+
+        .section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+        }
+
+        .lisp-panel .section-title { color: var(--accent-lisp); }
+        .prolog-panel .section-title { color: var(--accent-prolog); }
+        .wasm-panel .section-title { color: var(--accent-wasm); }
+
+        .editor-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 45px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.875rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-align: right;
+            padding-right: 0.75rem;
+            line-height: 1.6;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .editor {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-editor);
+            border: none;
+            outline: none;
+            resize: none;
+            padding: 0.875rem 1rem 0.875rem 55px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text);
+            tab-size: 2;
+        }
+
+        .editor::placeholder {
+            color: var(--text-dim);
+        }
+
+        /* Output Section */
+        .output-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .output {
+            flex: 1;
+            background: var(--bg-editor);
+            padding: 0.875rem 1.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.8;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .output-line {
+            margin-bottom: 0.2rem;
+        }
+
+        .output-line.input { color: var(--text-dim); }
+        .output-line.result { color: var(--success); }
+        .output-line.error { color: var(--error); }
+        .output-line.info { color: var(--warning); }
+
+        .prompt { color: var(--accent-lisp); }
+        .prolog-panel .prompt { color: var(--accent-prolog); }
+        .wasm-panel .prompt { color: var(--accent-wasm); }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .btn {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--text-dim);
+        }
+
+        .btn.primary {
+            background: var(--accent-lisp);
+            border-color: var(--accent-lisp);
+            color: var(--bg-dark);
+        }
+
+        .btn.primary:hover {
+            box-shadow: 0 0 15px var(--accent-lisp-glow);
+        }
+
+        .prolog-panel .btn.primary {
+            background: var(--accent-prolog);
+            border-color: var(--accent-prolog);
+        }
+
+        .prolog-panel .btn.primary:hover {
+            box-shadow: 0 0 15px var(--accent-prolog-glow);
+        }
+
+        .wasm-panel .btn.primary {
+            background: var(--accent-wasm);
+            border-color: var(--accent-wasm);
+        }
+
+        .wasm-panel .btn.primary:hover {
+            box-shadow: 0 0 15px var(--accent-wasm-glow);
+        }
+
+        /* Examples Panel */
+        .examples-panel {
+            width: 240px;
+            border-left: 1px solid var(--border);
+            background: var(--bg-panel);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .examples-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.4rem;
+        }
+
+        .example-item {
+            padding: 0.6rem 0.8rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 0.2rem;
+        }
+
+        .example-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .example-item h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 0.15rem;
+        }
+
+        .example-item p {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        .lisp-panel .example-item:hover h4 { color: var(--accent-lisp); }
+        .prolog-panel .example-item:hover h4 { color: var(--accent-prolog); }
+        .wasm-panel .example-item:hover h4 { color: var(--accent-wasm); }
+
+        /* REPL Input */
+        .repl-input-container {
+            padding: 0.75rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.4rem;
+            background: var(--bg-panel);
+            flex-shrink: 0;
+        }
+
+        .repl-input {
+            flex: 1;
+            background: var(--bg-editor);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 0.6rem 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text);
+            outline: none;
+        }
+
+        .repl-input:focus {
+            border-color: var(--accent-lisp);
+        }
+
+        .prolog-panel .repl-input:focus {
+            border-color: var(--accent-prolog);
+        }
+
+        .wasm-panel .repl-input:focus {
+            border-color: var(--accent-wasm);
+        }
+
+        /* WASM specific styles */
+        .wasm-execution {
+            padding: 0.75rem;
+            border-top: 1px solid var(--border);
+            background: var(--bg-panel);
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .wasm-execution label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .wasm-execution input {
+            background: var(--bg-editor);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.4rem 0.6rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text);
+            outline: none;
+            width: 120px;
+        }
+
+        .wasm-execution input:focus {
+            border-color: var(--accent-wasm);
+        }
+
+        .exports-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.3rem 0.6rem;
+            background: rgba(167, 139, 250, 0.1);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            color: var(--accent-wasm);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-dim);
+        }
+
+        /* Keyboard shortcut hint */
+        .shortcut {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.15rem 0.3rem;
+            border-radius: 3px;
+            margin-left: 0.3rem;
+        }
+
+        /* Info box */
+        .info-box {
+            margin: 0.5rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .info-box h5 {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: 0.4rem;
+            font-weight: 500;
+        }
+
+        .info-box code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            color: var(--accent-wasm);
+        }
+
+        .info-box p {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    <div class="grid-overlay"></div>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon">λ?⚙</div>
+            <div>
+                <h1>Multi-Language IDE</h1>
+                <span>Lisp • Prolog • WebAssembly</span>
+            </div>
+        </div>
+        <div class="tabs">
+            <button class="tab lisp active" onclick="switchTab('lisp')">Common Lisp</button>
+            <button class="tab prolog" onclick="switchTab('prolog')">Prolog</button>
+            <button class="tab wasm" onclick="switchTab('wasm')">WebAssembly</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- LISP Panel -->
+        <div class="panel lisp-panel active" id="lisp-panel">
+            <div class="editor-section">
+                <div class="section-header">
+                    <span class="section-title">Editor</span>
+                    <div class="btn-group">
+                        <button class="btn" onclick="clearLispEditor()">Clear</button>
+                        <button class="btn primary" onclick="runLisp()">▶ Run <span class="shortcut">Ctrl+Enter</span></button>
+                    </div>
+                </div>
+                <div class="editor-wrapper">
+                    <div class="line-numbers" id="lisp-lines">1</div>
+                    <textarea class="editor" id="lisp-editor" placeholder="; Common Lisp Code hier eingeben...
+; Beispiel:
+(defun factorial (n)
+  (if (<= n 1)
+      1
+      (* n (factorial (- n 1)))))
+
+(factorial 5)" spellcheck="false"></textarea>
+                </div>
+            </div>
+            <div class="output-section">
+                <div class="section-header">
+                    <span class="section-title">Output / REPL</span>
+                    <button class="btn" onclick="clearLispOutput()">Clear</button>
+                </div>
+                <div class="output" id="lisp-output">
+                    <div class="output-line info">; Common Lisp Interpreter bereit</div>
+                    <div class="output-line info">; Unterstützt: defun, let, lambda, if, cond, car, cdr, cons, list, mapcar...</div>
+                </div>
+                <div class="repl-input-container">
+                    <input type="text" class="repl-input" id="lisp-repl" placeholder="REPL: Ausdruck eingeben..." onkeypress="handleLispRepl(event)">
+                    <button class="btn primary" onclick="evalLispRepl()">Eval</button>
+                </div>
+            </div>
+            <div class="examples-panel">
+                <div class="section-header">
+                    <span class="section-title">Beispiele</span>
+                </div>
+                <div class="examples-list">
+                    <div class="example-item" onclick="loadLispExample('factorial')">
+                        <h4>Fakultät</h4>
+                        <p>Rekursive Berechnung</p>
+                    </div>
+                    <div class="example-item" onclick="loadLispExample('fibonacci')">
+                        <h4>Fibonacci</h4>
+                        <p>Fibonacci-Zahlen</p>
+                    </div>
+                    <div class="example-item" onclick="loadLispExample('map')">
+                        <h4>Map & Filter</h4>
+                        <p>Higher-Order Functions</p>
+                    </div>
+                    <div class="example-item" onclick="loadLispExample('quicksort')">
+                        <h4>Quicksort</h4>
+                        <p>Funktionaler Sort</p>
+                    </div>
+                    <div class="example-item" onclick="loadLispExample('lambda')">
+                        <h4>Lambda & Closures</h4>
+                        <p>Anonyme Funktionen</p>
+                    </div>
+                    <div class="example-item" onclick="loadLispExample('listops')">
+                        <h4>Listenoperationen</h4>
+                        <p>car, cdr, cons, append</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prolog Panel -->
+        <div class="panel prolog-panel" id="prolog-panel">
+            <div class="editor-section">
+                <div class="section-header">
+                    <span class="section-title">Wissensbasis</span>
+                    <div class="btn-group">
+                        <button class="btn" onclick="clearPrologEditor()">Clear</button>
+                        <button class="btn primary" onclick="loadPrologKB()">▶ Laden <span class="shortcut">Ctrl+Enter</span></button>
+                    </div>
+                </div>
+                <div class="editor-wrapper">
+                    <div class="line-numbers" id="prolog-lines">1</div>
+                    <textarea class="editor" id="prolog-editor" placeholder="% Prolog Wissensbasis hier eingeben...
+% Beispiel:
+elternteil(tom, bob).
+elternteil(tom, liz).
+elternteil(bob, ann).
+
+grosseltern(X, Z) :- elternteil(X, Y), elternteil(Y, Z)." spellcheck="false"></textarea>
+                </div>
+            </div>
+            <div class="output-section">
+                <div class="section-header">
+                    <span class="section-title">Abfragen</span>
+                    <button class="btn" onclick="clearPrologOutput()">Clear</button>
+                </div>
+                <div class="output" id="prolog-output">
+                    <div class="output-line info">% Prolog Interpreter bereit</div>
+                    <div class="output-line info">% Lade zuerst eine Wissensbasis, dann stelle Abfragen</div>
+                </div>
+                <div class="repl-input-container">
+                    <input type="text" class="repl-input" id="prolog-query" placeholder="?- Abfrage (z.B. elternteil(tom, X).)" onkeypress="handlePrologQuery(event)">
+                    <button class="btn primary" onclick="queryProlog()">Query</button>
+                </div>
+            </div>
+            <div class="examples-panel">
+                <div class="section-header">
+                    <span class="section-title">Beispiele</span>
+                </div>
+                <div class="examples-list">
+                    <div class="example-item" onclick="loadPrologExample('family')">
+                        <h4>Stammbaum</h4>
+                        <p>Familienbeziehungen</p>
+                    </div>
+                    <div class="example-item" onclick="loadPrologExample('processor')">
+                        <h4>Prozessor-Hierarchie</h4>
+                        <p>Vorgänger/Nachfolger</p>
+                    </div>
+                    <div class="example-item" onclick="loadPrologExample('lists')">
+                        <h4>Listen</h4>
+                        <p>member, append, reverse</p>
+                    </div>
+                    <div class="example-item" onclick="loadPrologExample('math')">
+                        <h4>Arithmetik</h4>
+                        <p>Fakultät, Fibonacci</p>
+                    </div>
+                    <div class="example-item" onclick="loadPrologExample('logic')">
+                        <h4>Logik-Rätsel</h4>
+                        <p>Wer wohnt wo?</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WASM Panel -->
+        <div class="panel wasm-panel" id="wasm-panel">
+            <div class="editor-section">
+                <div class="section-header">
+                    <span class="section-title">WAT Code (WebAssembly Text)</span>
+                    <div class="btn-group">
+                        <button class="btn" onclick="clearWasmEditor()">Clear</button>
+                        <button class="btn primary" onclick="compileWasm()">▶ Kompilieren <span class="shortcut">Ctrl+Enter</span></button>
+                    </div>
+                </div>
+                <div class="editor-wrapper">
+                    <div class="line-numbers" id="wasm-lines">1</div>
+                    <textarea class="editor" id="wasm-editor" placeholder=";; WebAssembly Text Format (WAT)
+;; Beispiel:
+(module
+  (func (export &quot;add&quot;) (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.add
+  )
+)" spellcheck="false"></textarea>
+                </div>
+            </div>
+            <div class="output-section">
+                <div class="section-header">
+                    <span class="section-title">Output</span>
+                    <div class="btn-group" id="wasm-exports" style="display: none;">
+                        <span class="exports-badge">Exports: <span id="wasm-exports-list"></span></span>
+                    </div>
+                </div>
+                <div class="output" id="wasm-output">
+                    <div class="output-line info">;; WebAssembly Compiler bereit</div>
+                    <div class="output-line info">;; Schreibe WAT-Code und klicke "Kompilieren"</div>
+                </div>
+                <div class="wasm-execution">
+                    <label>Funktion:</label>
+                    <input type="text" id="wasm-func" placeholder="add" value="add">
+                    <label>Parameter:</label>
+                    <input type="text" id="wasm-params" placeholder="5, 3" value="5, 3">
+                    <button class="btn primary" onclick="executeWasm()">Ausführen</button>
+                </div>
+            </div>
+            <div class="examples-panel">
+                <div class="section-header">
+                    <span class="section-title">Beispiele</span>
+                </div>
+                <div class="examples-list">
+                    <div class="example-item" onclick="loadWasmExample('add')">
+                        <h4>Addition</h4>
+                        <p>Zwei Zahlen addieren</p>
+                    </div>
+                    <div class="example-item" onclick="loadWasmExample('multiply')">
+                        <h4>Multiplikation</h4>
+                        <p>Zwei Zahlen multiplizieren</p>
+                    </div>
+                    <div class="example-item" onclick="loadWasmExample('factorial')">
+                        <h4>Fakultät</h4>
+                        <p>Mit Schleife (loop)</p>
+                    </div>
+                    <div class="example-item" onclick="loadWasmExample('max')">
+                        <h4>Maximum</h4>
+                        <p>if-else Verzweigung</p>
+                    </div>
+                    <div class="example-item" onclick="loadWasmExample('ifelse')">
+                        <h4>Vorzeichen</h4>
+                        <p>Geschachtelte if-else</p>
+                    </div>
+                    <div class="example-item" onclick="loadWasmExample('float')">
+                        <h4>Float-Operationen</h4>
+                        <p>f64 Division & Rundung</p>
+                    </div>
+                </div>
+                <div class="info-box">
+                    <h5>WAT Syntax</h5>
+                    <p>Verwende <code>local.get</code>/<code>local.set</code> (neu) oder <code>get_local</code>/<code>set_local</code> (alt)</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- WABT.js for WAT to WASM conversion -->
+    <script src="https://cdn.jsdelivr.net/npm/wabt@1.0.32/index.js"></script>
+
+    <script>
+        // ============================================
+        // TAB SWITCHING
+        // ============================================
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            
+            document.querySelector(`.tab.${tab}`).classList.add('active');
+            document.getElementById(`${tab}-panel`).classList.add('active');
+        }
+
+        // ============================================
+        // LINE NUMBERS
+        // ============================================
+        function updateLineNumbers(editorId, linesId) {
+            const editor = document.getElementById(editorId);
+            const lines = document.getElementById(linesId);
+            const lineCount = editor.value.split('\n').length;
+            lines.innerHTML = Array.from({length: lineCount}, (_, i) => i + 1).join('<br>');
+        }
+
+        ['lisp', 'prolog', 'wasm'].forEach(lang => {
+            const editor = document.getElementById(`${lang}-editor`);
+            const linesId = `${lang}-lines`;
+            
+            editor.addEventListener('input', () => updateLineNumbers(`${lang}-editor`, linesId));
+            editor.addEventListener('scroll', function() {
+                document.getElementById(linesId).scrollTop = this.scrollTop;
+            });
+            
+            // Tab support
+            editor.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = this.selectionStart;
+                    const end = this.selectionEnd;
+                    this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+                    this.selectionStart = this.selectionEnd = start + 2;
+                    updateLineNumbers(`${lang}-editor`, linesId);
+                }
+            });
+        });
+
+        // ============================================
+        // COMMON LISP INTERPRETER
+        // ============================================
+        class LispInterpreter {
+            constructor() {
+                this.env = this.createGlobalEnv();
+            }
+
+            createGlobalEnv() {
+                return {
+                    '+': (...args) => args.reduce((a, b) => a + b, 0),
+                    '-': (...args) => args.length === 1 ? -args[0] : args.reduce((a, b) => a - b),
+                    '*': (...args) => args.reduce((a, b) => a * b, 1),
+                    '/': (...args) => args.reduce((a, b) => a / b),
+                    'mod': (a, b) => a % b,
+                    '=': (a, b) => a === b,
+                    '<': (a, b) => a < b,
+                    '>': (a, b) => a > b,
+                    '<=': (a, b) => a <= b,
+                    '>=': (a, b) => a >= b,
+                    'eq': (a, b) => a === b,
+                    'equal': (a, b) => JSON.stringify(a) === JSON.stringify(b),
+                    'not': (a) => !a,
+                    'and': (...args) => args.every(a => a),
+                    'or': (...args) => args.some(a => a),
+                    'car': (list) => list[0],
+                    'cdr': (list) => list.slice(1),
+                    'cons': (a, list) => [a, ...list],
+                    'list': (...args) => args,
+                    'append': (...lists) => lists.flat(),
+                    'length': (list) => list.length,
+                    'null': (a) => a === null || (Array.isArray(a) && a.length === 0),
+                    'atom': (a) => !Array.isArray(a),
+                    'listp': (a) => Array.isArray(a),
+                    'numberp': (a) => typeof a === 'number',
+                    'zerop': (a) => a === 0,
+                    'plusp': (a) => a > 0,
+                    'minusp': (a) => a < 0,
+                    'evenp': (a) => a % 2 === 0,
+                    'oddp': (a) => a % 2 !== 0,
+                    'abs': Math.abs,
+                    'sqrt': Math.sqrt,
+                    'expt': Math.pow,
+                    'max': Math.max,
+                    'min': Math.min,
+                    'floor': Math.floor,
+                    'ceiling': Math.ceil,
+                    'round': Math.round,
+                    'sin': Math.sin,
+                    'cos': Math.cos,
+                    'print': (x) => { this.output.push(this.stringify(x)); return x; },
+                    't': true,
+                    'nil': null,
+                    'pi': Math.PI,
+                    'first': (list) => list[0],
+                    'second': (list) => list[1],
+                    'third': (list) => list[2],
+                    'rest': (list) => list.slice(1),
+                    'last': (list) => [list[list.length - 1]],
+                    'reverse': (list) => [...list].reverse(),
+                    'nth': (n, list) => list[n],
+                    'member': (item, list) => {
+                        const idx = list.indexOf(item);
+                        return idx >= 0 ? list.slice(idx) : null;
+                    },
+                    'remove': (item, list) => list.filter(x => x !== item),
+                    'mapcar': (fn, list) => list.map(x => fn(x)),
+                    'remove-if': (pred, list) => list.filter(x => !pred(x)),
+                    'remove-if-not': (pred, list) => list.filter(x => pred(x)),
+                };
+            }
+
+            parse(code) {
+                const tokens = this.tokenize(code);
+                return this.buildAST(tokens);
+            }
+
+            tokenize(code) {
+                const tokens = [];
+                let i = 0;
+                while (i < code.length) {
+                    const char = code[i];
+                    if (/\s/.test(char)) { i++; continue; }
+                    if (char === ';') {
+                        while (i < code.length && code[i] !== '\n') i++;
+                        continue;
+                    }
+                    if (char === '(' || char === ')') {
+                        tokens.push(char);
+                        i++;
+                        continue;
+                    }
+                    if (char === "'") {
+                        tokens.push("'");
+                        i++;
+                        continue;
+                    }
+                    if (char === '"') {
+                        let str = '';
+                        i++;
+                        while (i < code.length && code[i] !== '"') {
+                            if (code[i] === '\\') i++;
+                            str += code[i];
+                            i++;
+                        }
+                        i++;
+                        tokens.push({ type: 'string', value: str });
+                        continue;
+                    }
+                    let token = '';
+                    while (i < code.length && !/[\s()'"]/.test(code[i])) {
+                        token += code[i];
+                        i++;
+                    }
+                    if (token) {
+                        const num = parseFloat(token);
+                        if (!isNaN(num) && token !== '-' && token !== '+') {
+                            tokens.push({ type: 'number', value: num });
+                        } else {
+                            tokens.push({ type: 'symbol', value: token.toLowerCase() });
+                        }
+                    }
+                }
+                return tokens;
+            }
+
+            buildAST(tokens) {
+                const expressions = [];
+                let pos = 0;
+                
+                const parseExpr = () => {
+                    const token = tokens[pos];
+                    if (token === "'") {
+                        pos++;
+                        return ['quote', parseExpr()];
+                    }
+                    if (token === '(') {
+                        pos++;
+                        const list = [];
+                        while (tokens[pos] !== ')') {
+                            if (pos >= tokens.length) throw new Error("Unmatched parenthesis");
+                            list.push(parseExpr());
+                        }
+                        pos++;
+                        return list;
+                    }
+                    if (token === ')') throw new Error("Unexpected ')'");
+                    pos++;
+                    if (token.type === 'number') return token.value;
+                    if (token.type === 'string') return token.value;
+                    if (token.type === 'symbol') return token.value;
+                    return token;
+                };
+                
+                while (pos < tokens.length) {
+                    expressions.push(parseExpr());
+                }
+                return expressions;
+            }
+
+            eval(expr, env = this.env) {
+                if (typeof expr === 'number' || typeof expr === 'string') return expr;
+                if (typeof expr === 'string' || (expr && expr.type === 'symbol')) {
+                    const name = typeof expr === 'string' ? expr : expr.value;
+                    if (name in env) return env[name];
+                    throw new Error(`Undefined symbol: ${name}`);
+                }
+                if (!Array.isArray(expr) || expr.length === 0) return null;
+                
+                const [op, ...args] = expr;
+                const opName = typeof op === 'string' ? op : (op && op.value);
+                
+                switch (opName) {
+                    case 'quote': return args[0];
+                    case 'if':
+                        const [test, consequent, alternate] = args;
+                        return this.eval(test, env) ? this.eval(consequent, env) : this.eval(alternate, env);
+                    case 'cond':
+                        for (const clause of args) {
+                            const [condition, ...body] = clause;
+                            if (condition === 't' || this.eval(condition, env)) {
+                                let result = null;
+                                for (const expr of body) result = this.eval(expr, env);
+                                return result;
+                            }
+                        }
+                        return null;
+                    case 'let':
+                    case 'let*':
+                        const bindings = args[0];
+                        const letBody = args.slice(1);
+                        const letEnv = {...env};
+                        for (const [name, value] of bindings) {
+                            letEnv[name] = this.eval(value, opName === 'let*' ? letEnv : env);
+                        }
+                        let letResult = null;
+                        for (const expr of letBody) letResult = this.eval(expr, letEnv);
+                        return letResult;
+                    case 'lambda':
+                        const params = args[0];
+                        const body = args.slice(1);
+                        return (...values) => {
+                            const lambdaEnv = {...env};
+                            params.forEach((p, i) => lambdaEnv[p] = values[i]);
+                            let result = null;
+                            for (const expr of body) result = this.eval(expr, lambdaEnv);
+                            return result;
+                        };
+                    case 'defun':
+                        const funcName = args[0];
+                        const funcParams = args[1];
+                        const funcBody = args.slice(2);
+                        this.env[funcName] = (...values) => {
+                            const funcEnv = {...this.env};
+                            funcParams.forEach((p, i) => funcEnv[p] = values[i]);
+                            let result = null;
+                            for (const expr of funcBody) result = this.eval(expr, funcEnv);
+                            return result;
+                        };
+                        return funcName;
+                    case 'setq':
+                    case 'setf':
+                        for (let i = 0; i < args.length; i += 2) {
+                            this.env[args[i]] = this.eval(args[i + 1], env);
+                        }
+                        return this.env[args[args.length - 2]];
+                    case 'progn':
+                        let prognResult = null;
+                        for (const expr of args) prognResult = this.eval(expr, env);
+                        return prognResult;
+                    case 'funcall':
+                        const fn = this.eval(args[0], env);
+                        return fn(...args.slice(1).map(a => this.eval(a, env)));
+                    default:
+                        const func = this.eval(op, env);
+                        if (typeof func !== 'function') throw new Error(`Not a function: ${opName}`);
+                        return func(...args.map(a => this.eval(a, env)));
+                }
+            }
+
+            stringify(value) {
+                if (value === null) return 'NIL';
+                if (value === true) return 'T';
+                if (value === false) return 'NIL';
+                if (typeof value === 'function') return '#<FUNCTION>';
+                if (Array.isArray(value)) return '(' + value.map(v => this.stringify(v)).join(' ') + ')';
+                return String(value);
+            }
+
+            run(code) {
+                this.output = [];
+                const expressions = this.parse(code);
+                let result = null;
+                for (const expr of expressions) result = this.eval(expr);
+                return { result, output: this.output };
+            }
+        }
+
+        const lispInterpreter = new LispInterpreter();
+
+        function runLisp() {
+            const code = document.getElementById('lisp-editor').value;
+            const output = document.getElementById('lisp-output');
+            try {
+                const { result, output: prints } = lispInterpreter.run(code);
+                output.innerHTML += `<div class="output-line input"><span class="prompt">></span> [Code ausgeführt]</div>`;
+                for (const p of prints) output.innerHTML += `<div class="output-line">${escapeHtml(p)}</div>`;
+                output.innerHTML += `<div class="output-line result">${escapeHtml(lispInterpreter.stringify(result))}</div>`;
+            } catch (e) {
+                output.innerHTML += `<div class="output-line error">Error: ${escapeHtml(e.message)}</div>`;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function evalLispRepl() {
+            const input = document.getElementById('lisp-repl');
+            const code = input.value.trim();
+            if (!code) return;
+            const output = document.getElementById('lisp-output');
+            output.innerHTML += `<div class="output-line input"><span class="prompt">></span> ${escapeHtml(code)}</div>`;
+            try {
+                const { result, output: prints } = lispInterpreter.run(code);
+                for (const p of prints) output.innerHTML += `<div class="output-line">${escapeHtml(p)}</div>`;
+                output.innerHTML += `<div class="output-line result">${escapeHtml(lispInterpreter.stringify(result))}</div>`;
+            } catch (e) {
+                output.innerHTML += `<div class="output-line error">Error: ${escapeHtml(e.message)}</div>`;
+            }
+            input.value = '';
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function handleLispRepl(e) { if (e.key === 'Enter') evalLispRepl(); }
+        function clearLispEditor() { document.getElementById('lisp-editor').value = ''; updateLineNumbers('lisp-editor', 'lisp-lines'); }
+        function clearLispOutput() { document.getElementById('lisp-output').innerHTML = '<div class="output-line info">; Output cleared</div>'; }
+
+        // ============================================
+        // PROLOG INTERPRETER
+        // ============================================
+        class PrologInterpreter {
+            constructor() { this.facts = []; this.rules = []; }
+
+            parse(code) {
+                this.facts = []; this.rules = [];
+                code = code.replace(/%.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+                const clauses = code.split('.').map(c => c.trim()).filter(c => c);
+                for (const clause of clauses) {
+                    if (clause.includes(':-')) {
+                        const [head, body] = clause.split(':-').map(s => s.trim());
+                        this.rules.push({ head: this.parseTerm(head), body: this.parseBody(body) });
+                    } else {
+                        const fact = this.parseTerm(clause);
+                        if (fact) this.facts.push(fact);
+                    }
+                }
+            }
+
+            parseTerm(str) {
+                str = str.trim();
+                if (!str) return null;
+                if (str.startsWith('[')) return this.parseList(str);
+                const match = str.match(/^([a-z_][a-zA-Z0-9_]*)\s*\((.+)\)$/);
+                if (match) return { functor: match[1], args: this.parseArgs(match[2]) };
+                if (/^[A-Z_]/.test(str)) return { variable: str };
+                if (/^-?\d+(\.\d+)?$/.test(str)) return { value: parseFloat(str) };
+                return { atom: str };
+            }
+
+            parseList(str) {
+                str = str.trim();
+                if (str === '[]') return { list: [] };
+                const inner = str.slice(1, -1).trim();
+                if (inner.includes('|')) {
+                    const [headPart, tailPart] = this.splitOnPipe(inner);
+                    return { list: this.parseArgs(headPart), tail: this.parseTerm(tailPart.trim()) };
+                }
+                return { list: this.parseArgs(inner) };
+            }
+
+            splitOnPipe(str) {
+                let depth = 0;
+                for (let i = 0; i < str.length; i++) {
+                    if (str[i] === '[' || str[i] === '(') depth++;
+                    else if (str[i] === ']' || str[i] === ')') depth--;
+                    else if (str[i] === '|' && depth === 0) return [str.slice(0, i), str.slice(i + 1)];
+                }
+                return [str, ''];
+            }
+
+            parseArgs(str) {
+                const args = []; let current = ''; let depth = 0;
+                for (const char of str) {
+                    if (char === ',' && depth === 0) { args.push(this.parseTerm(current.trim())); current = ''; }
+                    else { if (char === '(' || char === '[') depth++; if (char === ')' || char === ']') depth--; current += char; }
+                }
+                if (current.trim()) args.push(this.parseTerm(current.trim()));
+                return args;
+            }
+
+            parseBody(str) {
+                const goals = []; let current = ''; let depth = 0;
+                for (const char of str) {
+                    if (char === ',' && depth === 0) { const term = this.parseTerm(current.trim()); if (term) goals.push(term); current = ''; }
+                    else { if (char === '(' || char === '[') depth++; if (char === ')' || char === ']') depth--; current += char; }
+                }
+                const term = this.parseTerm(current.trim()); if (term) goals.push(term);
+                return goals;
+            }
+
+            unify(term1, term2, bindings = {}) {
+                term1 = this.deref(term1, bindings); term2 = this.deref(term2, bindings);
+                if (term1 && term1.variable) return { ...bindings, [term1.variable]: term2 };
+                if (term2 && term2.variable) return { ...bindings, [term2.variable]: term1 };
+                if (term1 && term1.atom !== undefined && term2 && term2.atom !== undefined) return term1.atom === term2.atom ? bindings : null;
+                if (term1 && term1.value !== undefined && term2 && term2.value !== undefined) return term1.value === term2.value ? bindings : null;
+                if (term1 && term1.list !== undefined && term2 && term2.list !== undefined) {
+                    if (term1.tail || term2.tail) return this.unifyLists(term1, term2, bindings);
+                    if (term1.list.length !== term2.list.length) return null;
+                    let result = bindings;
+                    for (let i = 0; i < term1.list.length; i++) { result = this.unify(term1.list[i], term2.list[i], result); if (!result) return null; }
+                    return result;
+                }
+                if (term1 && term1.functor && term2 && term2.functor) {
+                    if (term1.functor !== term2.functor || term1.args.length !== term2.args.length) return null;
+                    let result = bindings;
+                    for (let i = 0; i < term1.args.length; i++) { result = this.unify(term1.args[i], term2.args[i], result); if (!result) return null; }
+                    return result;
+                }
+                return null;
+            }
+
+            unifyLists(term1, term2, bindings) {
+                if (term1.tail && !term2.tail) {
+                    if (term2.list.length < term1.list.length) return null;
+                    let result = bindings;
+                    for (let i = 0; i < term1.list.length; i++) { result = this.unify(term1.list[i], term2.list[i], result); if (!result) return null; }
+                    return this.unify(term1.tail, { list: term2.list.slice(term1.list.length) }, result);
+                }
+                if (!term1.tail && term2.tail) return this.unifyLists(term2, term1, bindings);
+                return null;
+            }
+
+            deref(term, bindings) {
+                if (term && term.variable && bindings[term.variable]) return this.deref(bindings[term.variable], bindings);
+                return term;
+            }
+
+            *solve(goals, bindings = {}) {
+                if (goals.length === 0) { yield bindings; return; }
+                const [goal, ...restGoals] = goals;
+                const goalDeref = this.derefTerm(goal, bindings);
+                
+                if (goalDeref.functor === 'is') {
+                    const result = this.evalArith(goalDeref.args[1], bindings);
+                    const newBindings = this.unify(goalDeref.args[0], { value: result }, bindings);
+                    if (newBindings) yield* this.solve(restGoals, newBindings);
+                    return;
+                }
+                if (goalDeref.functor === '\\=' || goalDeref.atom === '\\=') {
+                    if (!this.unify(goalDeref.args[0], goalDeref.args[1], bindings)) yield* this.solve(restGoals, bindings);
+                    return;
+                }
+                if (goalDeref.functor === '=') {
+                    const newBindings = this.unify(goalDeref.args[0], goalDeref.args[1], bindings);
+                    if (newBindings) yield* this.solve(restGoals, newBindings);
+                    return;
+                }
+                if (['<', '>', '=<', '>=', '=:=', '=\\='].includes(goalDeref.functor)) {
+                    const a = this.evalArith(goalDeref.args[0], bindings);
+                    const b = this.evalArith(goalDeref.args[1], bindings);
+                    let result = false;
+                    switch (goalDeref.functor) {
+                        case '<': result = a < b; break; case '>': result = a > b; break;
+                        case '=<': result = a <= b; break; case '>=': result = a >= b; break;
+                        case '=:=': result = a === b; break; case '=\\=': result = a !== b; break;
+                    }
+                    if (result) yield* this.solve(restGoals, bindings);
+                    return;
+                }
+                for (const fact of this.facts) {
+                    const newBindings = this.unify(goalDeref, fact, {...bindings});
+                    if (newBindings) yield* this.solve(restGoals, newBindings);
+                }
+                for (const rule of this.rules) {
+                    const renamedRule = this.renameVariables(rule);
+                    const newBindings = this.unify(goalDeref, renamedRule.head, {...bindings});
+                    if (newBindings) yield* this.solve([...renamedRule.body, ...restGoals], newBindings);
+                }
+            }
+
+            derefTerm(term, bindings) {
+                term = this.deref(term, bindings);
+                if (term && term.args) return { ...term, args: term.args.map(a => this.derefTerm(a, bindings)) };
+                return term;
+            }
+
+            evalArith(term, bindings) {
+                term = this.deref(term, bindings);
+                if (term.value !== undefined) return term.value;
+                if (term.variable) throw new Error(`Unbound variable: ${term.variable}`);
+                if (term.functor) {
+                    const args = term.args.map(a => this.evalArith(a, bindings));
+                    switch (term.functor) {
+                        case '+': return args[0] + args[1]; case '-': return args.length === 1 ? -args[0] : args[0] - args[1];
+                        case '*': return args[0] * args[1]; case '/': return args[0] / args[1];
+                        case '//': return Math.floor(args[0] / args[1]); case 'mod': return args[0] % args[1];
+                        case '**': return Math.pow(args[0], args[1]);
+                    }
+                }
+                return term;
+            }
+
+            varCounter = 0;
+            renameVariables(rule) {
+                const mapping = {};
+                const rename = (term) => {
+                    if (!term) return term;
+                    if (term.variable) { if (!mapping[term.variable]) mapping[term.variable] = { variable: `_G${this.varCounter++}` }; return mapping[term.variable]; }
+                    if (term.args) return { ...term, args: term.args.map(rename) };
+                    if (term.list) return { ...term, list: term.list.map(rename), tail: term.tail ? rename(term.tail) : undefined };
+                    return term;
+                };
+                return { head: rename(rule.head), body: rule.body.map(rename) };
+            }
+
+            query(queryStr) {
+                const goals = this.parseBody(queryStr.replace(/\.$/, '').replace(/^\?-\s*/, ''));
+                const solutions = [];
+                for (const bindings of this.solve(goals)) {
+                    const solution = {};
+                    for (const [key, value] of Object.entries(bindings)) {
+                        if (!key.startsWith('_G')) solution[key] = this.termToString(value, bindings);
+                    }
+                    solutions.push(solution);
+                    if (solutions.length >= 20) break;
+                }
+                return solutions;
+            }
+
+            termToString(term, bindings = {}) {
+                term = this.deref(term, bindings);
+                if (!term) return 'nil';
+                if (term.atom !== undefined) return term.atom;
+                if (term.value !== undefined) return String(term.value);
+                if (term.variable) return term.variable;
+                if (term.list !== undefined) {
+                    const elements = term.list.map(e => this.termToString(e, bindings));
+                    if (term.tail) return `[${elements.join(', ')}|${this.termToString(term.tail, bindings)}]`;
+                    return `[${elements.join(', ')}]`;
+                }
+                if (term.functor) return `${term.functor}(${term.args.map(a => this.termToString(a, bindings)).join(', ')})`;
+                return String(term);
+            }
+        }
+
+        const prologInterpreter = new PrologInterpreter();
+
+        function loadPrologKB() {
+            const code = document.getElementById('prolog-editor').value;
+            const output = document.getElementById('prolog-output');
+            try {
+                prologInterpreter.parse(code);
+                output.innerHTML += `<div class="output-line info">% Wissensbasis geladen: ${prologInterpreter.facts.length} Fakten, ${prologInterpreter.rules.length} Regeln</div>`;
+            } catch (e) {
+                output.innerHTML += `<div class="output-line error">Error: ${escapeHtml(e.message)}</div>`;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function queryProlog() {
+            const input = document.getElementById('prolog-query');
+            const queryStr = input.value.trim();
+            if (!queryStr) return;
+            const output = document.getElementById('prolog-output');
+            output.innerHTML += `<div class="output-line input"><span class="prompt">?-</span> ${escapeHtml(queryStr)}</div>`;
+            try {
+                const solutions = prologInterpreter.query(queryStr);
+                if (solutions.length === 0) {
+                    output.innerHTML += `<div class="output-line error">false.</div>`;
+                } else {
+                    for (const solution of solutions) {
+                        const vars = Object.entries(solution);
+                        if (vars.length === 0) output.innerHTML += `<div class="output-line result">true.</div>`;
+                        else output.innerHTML += `<div class="output-line result">${escapeHtml(vars.map(([k, v]) => `${k} = ${v}`).join(', '))}</div>`;
+                    }
+                }
+            } catch (e) {
+                output.innerHTML += `<div class="output-line error">Error: ${escapeHtml(e.message)}</div>`;
+            }
+            input.value = '';
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function handlePrologQuery(e) { if (e.key === 'Enter') queryProlog(); }
+        function clearPrologEditor() { document.getElementById('prolog-editor').value = ''; updateLineNumbers('prolog-editor', 'prolog-lines'); }
+        function clearPrologOutput() { document.getElementById('prolog-output').innerHTML = '<div class="output-line info">% Output cleared</div>'; }
+
+        // ============================================
+        // WASM INTERPRETER
+        // ============================================
+        let wasmModule = null;
+        let wasmInstance = null;
+
+        async function compileWasm() {
+            const watCode = document.getElementById('wasm-editor').value;
+            const output = document.getElementById('wasm-output');
+            
+            try {
+                const wabt = await WabtModule();
+                const module = wabt.parseWat('input.wat', watCode);
+                const { buffer } = module.toBinary({ write_debug_names: true });
+                const result = await WebAssembly.instantiate(buffer);
+                wasmModule = result.module;
+                wasmInstance = result.instance;
+                
+                const exports = Object.keys(wasmInstance.exports);
+                const exportsEl = document.getElementById('wasm-exports');
+                const exportsList = document.getElementById('wasm-exports-list');
+                
+                if (exports.length > 0) {
+                    exportsList.textContent = exports.join(', ');
+                    exportsEl.style.display = 'flex';
+                }
+                
+                output.innerHTML += `<div class="output-line result">✅ Kompilierung erfolgreich!</div>`;
+                output.innerHTML += `<div class="output-line info">Exportierte Funktionen: ${exports.join(', ')}</div>`;
+            } catch (error) {
+                output.innerHTML += `<div class="output-line error">❌ Fehler: ${escapeHtml(error.message)}</div>`;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function executeWasm() {
+            if (!wasmInstance) {
+                document.getElementById('wasm-output').innerHTML += `<div class="output-line error">❌ Bitte zuerst kompilieren!</div>`;
+                return;
+            }
+            
+            const funcName = document.getElementById('wasm-func').value.trim();
+            const paramsStr = document.getElementById('wasm-params').value.trim();
+            const output = document.getElementById('wasm-output');
+            
+            if (!wasmInstance.exports[funcName]) {
+                output.innerHTML += `<div class="output-line error">❌ Funktion "${funcName}" nicht gefunden!</div>`;
+                return;
+            }
+            
+            try {
+                const params = paramsStr ? paramsStr.split(',').map(p => {
+                    const trimmed = p.trim();
+                    return trimmed.includes('.') ? parseFloat(trimmed) : parseInt(trimmed);
+                }) : [];
+                
+                const result = wasmInstance.exports[funcName](...params);
+                const callStr = `${funcName}(${params.join(', ')})`;
+                
+                output.innerHTML += `<div class="output-line input"><span class="prompt">></span> ${escapeHtml(callStr)}</div>`;
+                output.innerHTML += `<div class="output-line result">= ${result}</div>`;
+            } catch (error) {
+                output.innerHTML += `<div class="output-line error">❌ ${escapeHtml(error.message)}</div>`;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearWasmEditor() {
+            document.getElementById('wasm-editor').value = '';
+            updateLineNumbers('wasm-editor', 'wasm-lines');
+            wasmModule = null;
+            wasmInstance = null;
+            document.getElementById('wasm-exports').style.display = 'none';
+        }
+
+        // ============================================
+        // EXAMPLES
+        // ============================================
+        const lispExamples = {
+            factorial: `; Fakultät - rekursive Berechnung
+(defun factorial (n)
+  (if (<= n 1)
+      1
+      (* n (factorial (- n 1)))))
+
+(factorial 5)   ; => 120
+(factorial 10)  ; => 3628800`,
+            fibonacci: `; Fibonacci-Zahlen
+(defun fib (n)
+  (cond
+    ((= n 0) 0)
+    ((= n 1) 1)
+    (t (+ (fib (- n 1)) (fib (- n 2))))))
+
+(mapcar (lambda (n) (fib n)) '(0 1 2 3 4 5 6 7 8 9))`,
+            map: `; Higher-Order Functions
+(defun square (x) (* x x))
+(mapcar (lambda (x) (square x)) '(1 2 3 4 5))
+
+; Filter: nur gerade Zahlen
+(remove-if-not (lambda (x) (evenp x)) '(1 2 3 4 5 6 7 8))`,
+            quicksort: `; Quicksort - funktionaler Stil
+(defun quicksort (lst)
+  (if (null lst)
+      nil
+      (let ((pivot (car lst))
+            (rest (cdr lst)))
+        (append
+          (quicksort (remove-if-not (lambda (x) (< x pivot)) rest))
+          (list pivot)
+          (quicksort (remove-if (lambda (x) (< x pivot)) rest))))))
+
+(quicksort '(3 1 4 1 5 9 2 6 5 3 5))`,
+            lambda: `; Lambda und Closures
+((lambda (x y) (+ x y)) 3 4)
+
+(defun make-adder (n)
+  (lambda (x) (+ x n)))
+
+(setq add5 (make-adder 5))
+(funcall add5 10)`,
+            listops: `; Listenoperationen
+(car '(a b c))       ; => a
+(cdr '(a b c))       ; => (b c)
+(cons 'x '(a b))     ; => (x a b)
+(list 1 2 3 4)
+(append '(a b) '(c d))
+(reverse '(1 2 3 4 5))
+(nth 2 '(a b c d e))`
+        };
+
+        const prologExamples = {
+            family: `% Stammbaum
+elternteil(tom, bob).
+elternteil(tom, liz).
+elternteil(bob, ann).
+elternteil(bob, pat).
+elternteil(pat, jim).
+
+maennlich(tom).
+maennlich(bob).
+maennlich(jim).
+
+weiblich(liz).
+weiblich(ann).
+weiblich(pat).
+
+vater(X, Y) :- elternteil(X, Y), maennlich(X).
+mutter(X, Y) :- elternteil(X, Y), weiblich(X).
+grosseltern(X, Z) :- elternteil(X, Y), elternteil(Y, Z).
+geschwister(X, Y) :- elternteil(Z, X), elternteil(Z, Y), X \\= Y.
+vorfahre(X, Y) :- elternteil(X, Y).
+vorfahre(X, Y) :- elternteil(X, Z), vorfahre(Z, Y).`,
+            processor: `% Prozessor-Hierarchie
+vorgaenger(i4004, i8080).
+vorgaenger(i8080, i8086).
+vorgaenger(i8080, z80).
+vorgaenger(i8086, i386).
+vorgaenger(i386, i486).
+vorgaenger(i486, pentium).
+
+nachfolger(X, Y) :- vorgaenger(Y, X).
+vorfahr(X, Y) :- vorgaenger(X, Y).
+vorfahr(X, Y) :- vorgaenger(X, Z), vorfahr(Z, Y).
+geschwister(X, Y) :- vorgaenger(Z, X), vorgaenger(Z, Y), X \\= Y.`,
+            lists: `% Listen-Operationen
+mymember(X, [X|_]).
+mymember(X, [_|T]) :- mymember(X, T).
+
+myappend([], L, L).
+myappend([H|T], L, [H|R]) :- myappend(T, L, R).
+
+myreverse([], []).
+myreverse([H|T], R) :- myreverse(T, RT), myappend(RT, [H], R).
+
+mylength([], 0).
+mylength([_|T], N) :- mylength(T, N1), N is N1 + 1.`,
+            math: `% Arithmetik
+factorial(0, 1).
+factorial(N, F) :- 
+    N > 0, 
+    N1 is N - 1, 
+    factorial(N1, F1), 
+    F is N * F1.
+
+fib(0, 0).
+fib(1, 1).
+fib(N, F) :- 
+    N > 1,
+    N1 is N - 1,
+    N2 is N - 2,
+    fib(N1, F1),
+    fib(N2, F2),
+    F is F1 + F2.
+
+ggt(X, 0, X).
+ggt(X, Y, G) :- Y > 0, R is X mod Y, ggt(Y, R, G).`,
+            logic: `% Logik-Rätsel
+person(anna).
+person(bert).
+person(carl).
+haus(rot).
+haus(blau).
+haus(gruen).
+
+loesung(Anna, Bert, Carl) :-
+    haus(Anna), haus(Bert), haus(Carl),
+    Anna \\= Bert, Bert \\= Carl, Anna \\= Carl,
+    Anna = rot.`
+        };
+
+        const wasmExamples = {
+            add: { code: `(module
+  (func (export "add") (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.add
+  )
+)`, func: 'add', params: '5, 3' },
+            multiply: { code: `(module
+  (func (export "multiply") (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.mul
+  )
+)`, func: 'multiply', params: '6, 7' },
+            factorial: { code: `(module
+  (func (export "factorial") (param i32) (result i32)
+    (local i32)
+    i32.const 1
+    local.set 1
+    
+    (block $break
+      (loop $continue
+        local.get 0
+        i32.const 1
+        i32.le_s
+        br_if $break
+        
+        local.get 1
+        local.get 0
+        i32.mul
+        local.set 1
+        
+        local.get 0
+        i32.const 1
+        i32.sub
+        local.set 0
+        
+        br $continue
+      )
+    )
+    local.get 1
+  )
+)`, func: 'factorial', params: '5' },
+            max: { code: `(module
+  (func (export "max") (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.gt_s
+    if (result i32)
+      local.get 0
+    else
+      local.get 1
+    end
+  )
+)`, func: 'max', params: '10, 25' },
+            ifelse: { code: `(module
+  (func (export "checkSign") (param i32) (result i32)
+    ;; 1 wenn positiv, -1 wenn negativ, 0 wenn null
+    local.get 0
+    i32.const 0
+    i32.gt_s
+    if (result i32)
+      i32.const 1
+    else
+      local.get 0
+      i32.const 0
+      i32.lt_s
+      if (result i32)
+        i32.const -1
+      else
+        i32.const 0
+      end
+    end
+  )
+)`, func: 'checkSign', params: '-5' },
+            float: { code: `(module
+  (func (export "divide") (param f64 f64) (result f64)
+    local.get 0
+    local.get 1
+    f64.div
+  )
+)`, func: 'divide', params: '22.0, 7.0' }
+        };
+
+        function loadLispExample(name) {
+            document.getElementById('lisp-editor').value = lispExamples[name];
+            updateLineNumbers('lisp-editor', 'lisp-lines');
+        }
+
+        function loadPrologExample(name) {
+            document.getElementById('prolog-editor').value = prologExamples[name];
+            updateLineNumbers('prolog-editor', 'prolog-lines');
+        }
+
+        function loadWasmExample(name) {
+            const example = wasmExamples[name];
+            document.getElementById('wasm-editor').value = example.code;
+            document.getElementById('wasm-func').value = example.func;
+            document.getElementById('wasm-params').value = example.params;
+            updateLineNumbers('wasm-editor', 'wasm-lines');
+            document.getElementById('wasm-output').innerHTML += `<div class="output-line info">;; Beispiel "${name}" geladen</div>`;
+        }
+
+        // ============================================
+        // UTILITIES
+        // ============================================
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                if (document.getElementById('lisp-panel').classList.contains('active')) runLisp();
+                else if (document.getElementById('prolog-panel').classList.contains('active')) loadPrologKB();
+                else if (document.getElementById('wasm-panel').classList.contains('active')) compileWasm();
+            }
+        });
+
+        // Initialize
+        updateLineNumbers('lisp-editor', 'lisp-lines');
+        updateLineNumbers('prolog-editor', 'prolog-lines');
+        updateLineNumbers('wasm-editor', 'wasm-lines');
+    </script>
+</body>
+</html>
